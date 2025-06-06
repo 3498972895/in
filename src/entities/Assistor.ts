@@ -1,5 +1,5 @@
 import { BidderRequest, BidResult } from '../type.d.ts'
-import CommunicationVehicle from './CommunicationVehcile.ts'
+import { CommunicationVehicle } from '../type.d.ts'
 class Assistor {
 	assistorId: string
 	cv: CommunicationVehicle
@@ -27,8 +27,7 @@ class Assistor {
 		const request = {
 			assistor_id: this.assistorId,
 			transmissionRate: this.cv.transmissionRate,
-			transmissionPower: this.cv.transmissionPower,
-			computationResource: this.cv.computationResource,
+			computationResource: this.cv.computationResource ?? 0,
 			updateCallback: (data: BidResult) => {
 				this.update(data)
 			},

@@ -1,0 +1,15 @@
+{
+  "version": "5",
+  "redirects": {
+    "https://esm.sh/@types/lodash@~4.17.14/index.d.ts": "https://esm.sh/@types/lodash@4.17.17/index.d.ts",
+    "https://esm.sh/@types/seedrandom@~3.0.8/index.d.ts": "https://esm.sh/@types/seedrandom@3.0.8/index.d.ts",
+    "https://esm.sh/lodash": "https://esm.sh/lodash@4.17.21",
+    "https://esm.sh/seedrandom": "https://esm.sh/seedrandom@3.0.5"
+  },
+  "remote": {
+    "https://esm.sh/lodash@4.17.21": "c2f90ffd948b7a30f054986888bdc2667824115fa48ad583ca8b3a579ca4a5a8",
+    "https://esm.sh/lodash@4.17.21/denonext/lodash.mjs": "9d2a44e584d91008f61f974c6d0a32bf9afb1563761e60c366af0a293e8c759b",
+    "https://esm.sh/seedrandom@3.0.5": "999745407213d95c449f202aa78709a1e5d7821a077e178494c41748af23beb7",
+    "https://esm.sh/seedrandom@3.0.5/denonext/seedrandom.mjs": "f3e5135d3ae98210f633536ff952b93749622d778052bf62ee774e34935a8b57"
+  }
+}

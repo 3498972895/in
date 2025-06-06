@@ -9,7 +9,7 @@ import { randomBetween } from '../utils/generation.ts'
 import { Bidders, BidItems, BidResults, BidTransitions, TaskResDistro, TasksPaying, Time } from '../type.d.ts'
 import { ELECTRICITY_UNIT_PRICE, POWER_CONSUMPTION_FACTOR } from '../experimentalParameters.ts'
 
-function da121ma(bidItems: BidItems, bidders: Bidders, transmissionPower: number) {
+function vickrey(bidItems: BidItems, bidders: Bidders, transmissionPower: number) {
 	let serverCost = 0
 	let serverIncome = 0
 	let serverUtility = 0
@@ -50,10 +50,7 @@ function da121ma(bidItems: BidItems, bidders: Bidders, transmissionPower: number
 						complexity,
 					),
 				)
-				if (bidTransitions[bidId] == undefined) {
-					bidTransitions[bidId] = []
-				}
-				bidTransitions[bidId] = [...bidTransitions[bidId], {
+				bidTransitions[bidId].push({
 					acceptableMaximumAuctionPriceFromSeller,
 					acceptableMinimumAuctionPriceFromBidder,
 					transmissionDurationToBidder,
@@ -65,37 +62,78 @@ function da121ma(bidItems: BidItems, bidders: Bidders, transmissionPower: number
 							acceptableMaximumAuctionPriceFromSeller,
 						)
 						: 0,
-				}]
+				})
 			}
 		}
 	}
 
 	for (const bidId in bidItems) {
-		const transition = bidTransitions[bidId]
-		const [choosenBidderId, choosenBidUtilty] = transition.reduce(
-			([choosenBidderId, choosenBidUtility], bidTransition) => {
-				const currentBidUtility = bidTransition.acceptableMaximumAuctionPriceFromSeller - bidTransition.bid
-				return currentBidUtility > choosenBidUtility
-					? [bidTransition.bidderId, currentBidUtility]
-					: [choosenBidderId, choosenBidUtility]
+		const result = bidTransitions[bidId].reduce(
+			(
+				{
+					maxBidderId,
+					maxBidderCost,
+					maxBid,
+					maxUtility,
+					secondUtility,
+					secondBid,
+					bidIncome,
+					transmissionDuration,
+				},
+				bidTransition,
+			) => {
+				const currentUtility = bidTransition.acceptableMaximumAuctionPriceFromSeller - bidTransition.bid
+				const currentBidderId = bidTransition.bidderId
+				const currentBid = bidTransition.bid
+				const currentBidderCost = bidTransition.acceptableMinimumAuctionPriceFromBidder
+				const currentServerIncome = bidTransition.acceptableMaximumAuctionPriceFromSeller
+				const currentTransmissionDuration = bidTransition.transmissionDurationToBidder
+				if (currentUtility > maxUtility) {
+					secondUtility = maxUtility
+					secondBid = maxBid
+					maxUtility = currentUtility
+					maxBidderId = currentBidderId
+					maxBid = currentBid
+					maxBidderCost = currentBidderCost
+					bidIncome = currentServerIncome
+					transmissionDuration = currentTransmissionDuration
+				} else if (secondUtility < currentUtility && currentUtility < maxUtility) {
+					secondUtility = currentUtility
+					secondBid = currentBid
+				}
+				return {
+					maxBidderId,
+					maxBidderCost,
+					maxBid,
+					maxUtility,
+					secondUtility,
+					secondBid,
+					bidIncome,
+					transmissionDuration,
+				}
 			},
-			['', 0],
+			{
+				maxBidderId: '',
+				maxBidderCost: Infinity,
+				maxBid: -Infinity,
+				maxUtility: -Infinity,
+				secondUtility: -Infinity,
+				secondBid: -Infinity,
+				bidIncome: -Infinity,
+				transmissionDuration: -Infinity,
+			},
 		)
-		const choosenTransition = bidTransitions[bidId].filter((bidTransition) =>
-			bidTransition.bidderId == choosenBidderId
-		)[0]
-		serverCost += choosenTransition.bid
-		serverIncome += choosenTransition.acceptableMaximumAuctionPriceFromSeller
-		serverUtility += choosenBidUtilty
-		taskResDistro[bidItems[bidId].taskId] = choosenTransition.computationResourceRequirement
-		tasksPaying[bidItems[bidId].taskId] = bidItems[bidId].taskWillingToPaying
-		bidResults[choosenTransition.bidderId] = {
+		serverCost += result.secondBid
+		serverIncome += result.bidIncome
+		serverUtility += result.bidIncome - result.secondBid
+		bidResults[result.maxBidderId] = {
 			bidId: bidId,
-			winnerIncome: choosenTransition.bid,
-			winnerCost: choosenTransition.acceptableMinimumAuctionPriceFromBidder,
-			winnerUtility: choosenTransition.bid - choosenTransition.acceptableMinimumAuctionPriceFromBidder,
+			winnerIncome: result.secondBid,
+			winnerCost: result.maxBidderCost,
+			winnerUtility: result.secondBid - result.maxBidderCost,
 		}
-		transmissionDurationToWinnerBidders[bidItems[bidId].taskId] = choosenTransition.transmissionDurationToBidder
+
+		transmissionDurationToWinnerBidders[bidItems[bidId].taskId] = result.transmissionDuration
 	}
 
 	return {
@@ -108,4 +146,4 @@ function da121ma(bidItems: BidItems, bidders: Bidders, transmissionPower: number
 		bidResults,
 	}
 }
-export default da121ma
+export default vickrey

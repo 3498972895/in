@@ -1,3 +1,58 @@
+import { ComplexNumber } from '../type.d.ts'
+import { generateRayleighDistributedSmallScaleFading } from '../utils/generation.ts'
+
+export function computeChannelGain(distance: number, pathLossExponent: number) {
+	const fading = generateRayleighDistributedSmallScaleFading()
+	const denominator = Math.pow(distance, pathLossExponent / 2)
+	const thisChannelGain = {
+		real: fading.real / denominator,
+		imag: fading.imag / denominator,
+	}
+	return thisChannelGain
+}
+export function computeInterference(
+	cvsChannelGain: ComplexNumber[],
+	thisChannelGain: ComplexNumber,
+	allocatedTransmissionPower: number,
+) {
+	let interference = 0
+	for (let index = 0; index < cvsChannelGain.length; index++) {
+		const channelGain = cvsChannelGain[index]
+
+		const currentMagnitude = Math.sqrt(
+			channelGain.real * channelGain.real + channelGain.imag * channelGain.imag,
+		)
+
+		const thisMagnitude = Math.sqrt(
+			thisChannelGain.real * thisChannelGain.real +
+				thisChannelGain.imag * thisChannelGain.imag,
+		)
+
+		if (Math.pow(currentMagnitude, 2) < Math.pow(thisMagnitude, 2)) {
+			interference += Math.pow(currentMagnitude, 2) * allocatedTransmissionPower
+		}
+	}
+	return interference
+}
+
+export function computeSINR(
+	thisChannelGain: ComplexNumber,
+	allocatedTransmissionPower: number,
+	thisInterference: number,
+	whiteGaussianNoise: number,
+): number {
+	const thisMagnitude = Math.sqrt(
+		thisChannelGain.real * thisChannelGain.real + thisChannelGain.imag * thisChannelGain.imag,
+	)
+	const SINR = (Math.pow(thisMagnitude, 2) * allocatedTransmissionPower) /
+		(thisInterference + whiteGaussianNoise)
+	return SINR
+}
+
+export function computeTransmissionRate(bandWidth: number, SINR: number) {
+	const transmissionRate = bandWidth * Math.log10(1 + SINR)
+	return transmissionRate
+}
 export function computeTaskExecutionDuration(
 	dataSize: number,
 	complexity: number,
@@ -46,117 +101,14 @@ export function computeTaskTransmissionDuration(
 
 export function computeTaskMaxExecutionTime(
 	delayTolerance: number,
-	timeUsed: number,
+	timeElapsed: number,
 ): number {
-	return delayTolerance - timeUsed
+	return delayTolerance - timeElapsed
 }
 
 export function computeTaskTransmissionEnergyConsumption(
-	transmissionPower: number,
+	allocatedTransmissionPower: number,
 	transmissionDuration: number,
 ): number {
-	return transmissionPower * transmissionDuration
-}
-
-export function computeTotalCost(
-	energyCost: number,
-	pay: number,
-): number {
-	return energyCost + pay
-}
-
-export function computePreferenceCoefficient(
-	costWeight: number,
-	timeWeight: number,
-	executionDuration: number,
-	executionEnergyCost: number,
-): number {
-	return (costWeight / timeWeight) * (executionDuration / executionEnergyCost)
-}
-
-export function computeUserUtility(
-	preferenceCoefficient: number,
-	moneyCost: number,
-	timeCost: number,
-): number {
-	return preferenceCoefficient * moneyCost + timeCost
-}
-
-export function computeUserUtilityX0(
-	preferenceCoefficient: number,
-	executionEnergyCost: number,
-	executionDuration: number,
-): number {
-	return computeUserUtility(
-		preferenceCoefficient,
-		executionEnergyCost,
-		executionDuration,
-	)
-}
-
-export function computeUserUtilityX1(
-	transmissionCost: number,
-	paying: number,
-	transmissionDuration: number,
-	executionDuration: number,
-	preferenceCoefficient: number,
-): number {
-	const M = transmissionCost + paying
-	const t = transmissionDuration + executionDuration
-	return computeUserUtility(preferenceCoefficient, M, t)
-}
-
-export function computeMaximumAcceptablePrice(
-	utilityX0: number,
-	transmissionEnergyCost: number,
-	delayTolerance: number,
-	preferenceCoefficient: number,
-	minimumComputationResource: number,
-): number {
-	return (
-		utilityX0 -
-		transmissionEnergyCost -
-		(delayTolerance / preferenceCoefficient) * minimumComputationResource
-	)
-}
-
-// ServerCalculator 部分
-export function computeServerUtility(
-	sumP: number,
-	sumEnergyCostFromExecution: number,
-	sumEnergyCostFromTransmission: number,
-	sumOutsourcingCost: number,
-): number {
-	return (
-		sumP -
-		sumEnergyCostFromExecution -
-		sumEnergyCostFromTransmission -
-		sumOutsourcingCost
-	)
-}
-
-export function computeServerUtilityCompact(
-	sumIncome: number,
-	sumCost: number,
-): number {
-	return computeServerUtility(sumIncome, sumCost, 0, 0)
-}
-
-export function computeSwitchPrice(
-	dataSize: number,
-	complexity: number,
-	preferenceCoefficient: number,
-	minimumComputationResource: number,
-): number {
-	return (
-		(dataSize * complexity) /
-		(preferenceCoefficient * Math.pow(minimumComputationResource, 2))
-	)
-}
-
-export function hasEnoughComputationResource(
-	computationResource: number,
-	computationResourceRequirement: number,
-): boolean {
-	return computationResource > computationResourceRequirement
+	return allocatedTransmissionPower * transmissionDuration
 }

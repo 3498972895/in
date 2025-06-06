@@ -2,6 +2,8 @@
 	"tasks": {
 	},
 	"imports": {
+		"lodash": "https://esm.sh/lodash",
+		"seedrandom": "https://esm.sh/seedrandom"
 	},
 	"fmt": {
 		"useTabs": true,
@@ -10,7 +12,6 @@
 		"semiColons": false,
 		"singleQuote": true,
 		"proseWrap": "preserve",
-		"include": ["src/"],
-		"exclude": ["src/testdata/", "src/fixtures/**/*.ts"]
+		"include": ["src/"]
 	}
 }

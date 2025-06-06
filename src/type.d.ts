@@ -1,8 +1,17 @@
-type Resource = number
-type Price = number
-type Utility = number
-type Time = number
+export type Resource = number
+export type Price = number
+export type Utility = number
+export type Time = number
+type VehicleType = 'task' | 'assistor'
 
+export type AlgorithmResult = {
+	serverCost: Price
+	serverIncome: Price
+	serverUtility: Price
+	usedComputationResource: Price
+	avergeUnitResourcePrice: Price
+	taskResults: { [taskId: string]: TaskResult }
+}
 export type ComplexNumber = {
 	real: number
 	imag: number
@@ -11,60 +20,55 @@ export type Task = {
 	dataSize: number
 	complexity: number
 	delayTolerance: number
-}
-export type ExecutionLocation = 'local' | 'server' | 'assistor'
-
-export type TaskRecording = {
-	executionEnergyConsumptionOnLocal: number
-	executionEnergyCostOnLocal: number
-	executionDurationOnLocal: number
-
-	transmissionDurationToServer: number
-	transmissionEnergyConsumptionToServer: number
-	transmissionEnergyCostOnServer: number
-
-	allocatedComputationResource: number
-	minimumComputationResource: number
-
-	executionLocation: ExecutionLocation
-	executionDuration: number
+	value: number
+	decayFactor: number
 }
 
-export type TaskResDistro = {
-	[taskId: string]: Resource
+type CommunicationVehicle = {
+	computationResource?: number
+	transmissionPower: number
+	transmissionRate: number
 }
+
+export type ExecutionLocation = 'noWhere' | 'server' | 'assistor'
 
 export type TasksPaying = {
 	[taskId: string]: Price
-}
-export type TasksExecutionDuration = {
-	[taskId: string]: number
 }
 
 export type TaskRequest = {
 	userId: string
 	task: Task
-	transmissionDurationToServer: number
-	preferenceCoefficient: number
-	minimumComputationResource: number
-	maximumAcceptablePrice: number
+	transmissionRate: number
 	updateCallback: (data: TaskFeedback) => void
+}
+export type TaskFeedback = {
+	utility: number
+	paying: number
+}
+export type TaskFeedbacks = {
+	[taskId: string]: TaskFeedback
 }
 
 export type TaskRequests = {
 	[taskId: string]: TaskRequest
 }
 
-export type TaskFeedback = {
-	paying: number
+export type PayingResult = {
+	paying: Price
 	executionLocation: ExecutionLocation
-	executionDuration: number
-	allocatedComputationResource: number
-	minimumComputationResource?: number
+	allocatedComputationResource: Resource
+	executionDuration: Time
+	taskCost: Price
+	transmissionDurationToServer: Time
+	transmissionDurationToAssistor: Time
+	utilityFromUser: Utility
+	utilityFromServer: Utility
 }
-
-export type TaskFeedbacks = {
-	[taskId: string]: TaskFeedback
+export type NotPayingResult = { willingToPay: Price }
+export type TaskResult = PayingResult | NotPayingResult
+export type TaskResults = {
+	[taskId: string]: TaskResult
 }
 
 export type BidderRequest = {
@@ -81,16 +85,17 @@ export type BidItem = {
 	taskId: string
 	task: Task
 	taskWillingToPaying: number
-	transmitonDurationToServer: number
+	transmissionDurationToServer: number
 }
 export type BidItems = {
 	[bidId: string]: BidItem
 }
 
 export type BidTransition = {
-	acceptableMinimumAuctionPriceFromSeller: number
+	acceptableMaximumAuctionPriceFromSeller: number
 	acceptableMinimumAuctionPriceFromBidder: number
 	computationResourceRequirement: number
+	transmissionDurationToBidder: number
 	bidderId: string
 	bid: number
 }
