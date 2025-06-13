@@ -7,7 +7,7 @@ import {
 	computeTaskTransmissionDuration,
 	computeTaskTransmissionEnergyConsumption,
 } from '../utils/calculator.ts'
-import { AlgorithmResult, PayingResult, TaskRequests, TaskResults, Utility } from '../type.d.ts'
+import { PayingResult, StageIResult, TaskRequests, TaskResult, TaskResults, Utility } from '../type.d.ts'
 import { randomBetween } from '../utils/generation.ts'
 
 // 0. given paramters of GA
@@ -18,7 +18,7 @@ const mutationRate = 0.05
 const tournamentSize = 2
 
 // Genetic Algorithm implementation
-function geneticAlgorithm(
+function ga(
 	searchRange: [number, number],
 	fitnessFunction: (pCandidate: number) => number,
 ): { pBest: number; bestFitness: number } {
@@ -26,11 +26,8 @@ function geneticAlgorithm(
 		{ length: populationSize },
 		() => randomBetween(false, ...searchRange),
 	)
-
 	let pBest = population[0]
-
 	let bestFitness = fitnessFunction(pBest)
-
 	for (let generation = 0; generation < numGenerations; generation++) {
 		const fitnessValues = population.map(fitnessFunction)
 		const parents = []
@@ -75,11 +72,11 @@ function geneticAlgorithm(
 
 	return { pBest, bestFitness }
 }
-function barginGA(
+function bgap(
 	taskRequests: TaskRequests,
 	restComputationResource: number,
-	transmissionPower: number,
-): AlgorithmResult {
+	allocatedTransmissionPower: number,
+): StageIResult {
 	let serverCost = 0
 	let serverIncome = 0
 	let serverUtility = 0
@@ -100,7 +97,7 @@ function barginGA(
 
 		const transmissionDurationToServer = computeTaskTransmissionDuration(dataSize, transmissionRate)
 		const transmissionEnergyComsumption = computeTaskTransmissionEnergyConsumption(
-			transmissionPower,
+			allocatedTransmissionPower,
 			transmissionDurationToServer,
 		)
 		const transmissionEnergyCostToServer = computeEnergyCost(ELECTRICITY_UNIT_PRICE, transmissionEnergyComsumption)
@@ -112,7 +109,7 @@ function barginGA(
 		)
 		const pSwitch = decayFactor * dataSize * complexity / Math.pow(fMin, 2)
 
-		// 1. preparing  in non-constraint area with lots of iteratives
+		// 1. This is non-constraint area with lots of iteratives
 		const pMinNonConstraint = dataSize * complexity *
 			Math.pow(
 				ELECTRICITY_UNIT_PRICE * ELECTRICITY_UNIT_PRICE * POWER_CONSUMPTION_FACTOR * POWER_CONSUMPTION_FACTOR *
@@ -128,8 +125,18 @@ function barginGA(
 				2,
 			) / (4 * decayFactor * dataSize * complexity),
 		)
+		const searchRange: [number, number] = [pMinNonConstraint, pMaxNonConstraint]
+		const fitnessFunction = (pCandidate: number): number => {
+			const userUtility = value - transmissionEnergyCostToServer -
+				decayFactor * transmissionDurationToServer -
+				2 * Math.sqrt(pCandidate * decayFactor * dataSize * complexity)
+			const taskCost = ELECTRICITY_UNIT_PRICE * POWER_CONSUMPTION_FACTOR *
+				(decayFactor * dataSize * complexity * dataSize * complexity) / pCandidate
+			const serverUtility = Math.sqrt(pCandidate * decayFactor * dataSize * complexity) - taskCost
+			return userUtility * serverUtility
+		}
 
-		// 2. preparing  constraint area which has a direct solution
+		// 2. This is constraint area which has a direct solution
 		const pMinConstraint = Math.max(
 			pSwitch,
 			ELECTRICITY_UNIT_PRICE * POWER_CONSUMPTION_FACTOR * fMin * dataSize *
@@ -138,29 +145,21 @@ function barginGA(
 		const pMaxConstraint = (value - transmissionEnergyCostToServer - decayFactor * delayTolerance) / fMin
 
 		// 3. compare both of the userUtilityXserverUtility
-		let pBest = 0
-		let taskCost = 0
-		let allocatedComputationResource = 0
 
-		if (pMinNonConstraint <= pMaxNonConstraint && pMinConstraint <= pMaxConstraint) {
-			// both passing constraints conditions
-		} else if (pMinNonConstraint <= pMaxNonConstraint) {
+		let nonConstraintTaskResult = {}
+		let nonConstraintUtilityProduct = 0
+
+		let constraintTaskResult = {}
+		let constraintUtilityProduct = 0
+
+		if (pMinNonConstraint <= pMaxNonConstraint) {
 			//only NonConconstraint GA will be executed
-			const searchRange: [number, number] = [pMinNonConstraint, pMaxNonConstraint]
-			const fitnessFunction = (pCandidate: number): number => {
-				const userUtility = value - transmissionEnergyCostToServer -
-					decayFactor * transmissionDurationToServer -
-					2 * Math.sqrt(pCandidate * decayFactor * dataSize * complexity)
-				const taskCost = ELECTRICITY_UNIT_PRICE * POWER_CONSUMPTION_FACTOR *
-					(decayFactor * dataSize * complexity * dataSize * complexity) / pCandidate
-				const serverUtility = Math.sqrt(pCandidate * decayFactor * dataSize * complexity) - taskCost
-				return userUtility * serverUtility
-			}
-			const gaResult = geneticAlgorithm(searchRange, fitnessFunction)
-			pBest = gaResult.pBest
+			const gaResult = ga(searchRange, fitnessFunction)
+			const pBest = gaResult.pBest
+			nonConstraintUtilityProduct = gaResult.bestFitness
 
-			allocatedComputationResource = Math.sqrt((decayFactor * dataSize * complexity) / pBest)
-			taskCost = computeEnergyCost(
+			const allocatedComputationResource = Math.sqrt((decayFactor * dataSize * complexity) / pBest)
+			const taskCost = computeEnergyCost(
 				ELECTRICITY_UNIT_PRICE,
 				computeTaskExecutionEnergyConsumption(
 					POWER_CONSUMPTION_FACTOR,
@@ -169,52 +168,73 @@ function barginGA(
 					complexity,
 				),
 			)
-		} else if (pMinConstraint <= pMaxConstraint) {
-			//only Conconstraint solution is presented directly in conducting
-			taskCost = computeEnergyCost(
-				ELECTRICITY_UNIT_PRICE,
-				computeTaskExecutionEnergyConsumption(
-					POWER_CONSUMPTION_FACTOR,
-					allocatedComputationResource,
-					dataSize,
-					complexity,
-				),
-			)
-			allocatedComputationResource = fMin
-			pBest = (value - transmissionEnergyCostToServer - decayFactor * delayTolerance + taskCost) / (2 * fMin)
-			if (pBest > pMaxNonConstraint) {
-				pBest = pMaxNonConstraint
-			} else if (pBest < pMinConstraint) {
-				pBest = pMinNonConstraint
-			}
-		}
 
-		// 4. recording userUtilityxServerUtility info
-		if (pBest > 0) {
 			const paying = pBest * allocatedComputationResource
 			const executionDuration = computeTaskExecutionDuration(dataSize, complexity, allocatedComputationResource)
-
+			const utilityFromServer = paying - taskCost
 			const utilityFromUser = value - transmissionEnergyCostToServer - paying -
 				decayFactor * (transmissionDurationToServer + executionDuration)
-			const utilityFromServer = paying - taskCost
-
-			taskResults[taskId] = {
+			nonConstraintTaskResult = {
 				paying,
 				executionLocation: 'server',
 				allocatedComputationResource,
 				executionDuration,
 				taskCost,
-				transmissionDurationToServer,
-				transmissionDurationToAssistor: 0,
+				taskDuration: transmissionDurationToServer + executionDuration,
 				utilityFromUser,
 				utilityFromServer,
 			}
+		}
+		if (pMinConstraint <= pMaxConstraint) {
+			//only Conconstraint solution is presented directly in conducting
 
-			userUtilityXserverUtility[taskId] = utilityFromUser * utilityFromServer
+			const allocatedComputationResource = fMin
+			const taskCost = computeEnergyCost(
+				ELECTRICITY_UNIT_PRICE,
+				computeTaskExecutionEnergyConsumption(
+					POWER_CONSUMPTION_FACTOR,
+					allocatedComputationResource,
+					dataSize,
+					complexity,
+				),
+			)
+			let pBest = (value - transmissionEnergyCostToServer - decayFactor * delayTolerance + taskCost) / (2 * fMin)
+			if (pBest > pMaxConstraint) {
+				pBest = pMaxConstraint
+			} else if (pBest < pMinConstraint) {
+				pBest = pMinConstraint
+			}
+
+			const paying = pBest * allocatedComputationResource
+			const executionDuration = computeTaskExecutionDuration(dataSize, complexity, allocatedComputationResource)
+			const utilityFromServer = paying - taskCost
+			const utilityFromUser = value - transmissionEnergyCostToServer - paying -
+				decayFactor * (transmissionDurationToServer + executionDuration)
+			constraintUtilityProduct = utilityFromUser * utilityFromServer
+			constraintTaskResult = {
+				paying,
+				executionLocation: 'server',
+				allocatedComputationResource,
+				executionDuration,
+				taskCost,
+				taskDuration: transmissionDurationToServer + executionDuration,
+				utilityFromUser,
+				utilityFromServer,
+			}
+		}
+
+		// 4. recording userUtilityxServerUtility info
+		if (nonConstraintUtilityProduct || constraintUtilityProduct) {
+			if (nonConstraintUtilityProduct > constraintUtilityProduct) {
+				taskResults[taskId] = nonConstraintTaskResult as TaskResult
+				userUtilityXserverUtility[taskId] = nonConstraintUtilityProduct
+			} else {
+				taskResults[taskId] = constraintTaskResult as TaskResult
+				userUtilityXserverUtility[taskId] = constraintUtilityProduct
+			}
 		}
 	}
-
-	// 5. every time check volume of server and execute task by sequence of userUtilityxServerUtility utils tasks are all be done or resource of server has been exhausted
+	// 5. pushing task by desc sequence of userUtilityxServerUtility utils all tasks are finished or resource of server has been exhausted
 	for (const taskId in Object.fromEntries(Object.entries(userUtilityXserverUtility).sort((a, b) => b[1] - a[1]))) {
 		const taskResult = taskResults[taskId] as PayingResult
 		if (taskResult.allocatedComputationResource + usedComputationResource <= restComputationResource) {
@@ -222,10 +242,15 @@ function barginGA(
 			serverIncome += taskResult.paying
 			usedComputationResource += taskResult.allocatedComputationResource
 		} else {
-			taskResults[taskId] = { willingToPay: taskResult.paying }
+			taskResults[taskId] = {
+				willingToPay: taskResult.paying,
+				allowedTime: taskResult.executionDuration,
+				taskDuration: taskResult.taskDuration,
+				utilityFromUser: taskResult.utilityFromUser,
+			}
 		}
 	}
-	avergeUnitResourcePrice = serverIncome / usedComputationResource
+	avergeUnitResourcePrice = usedComputationResource == 0 ? 0 : serverIncome / usedComputationResource
 	serverUtility = serverIncome - serverCost
 	return {
 		serverCost,
@@ -236,4 +261,4 @@ function barginGA(
 		taskResults,
 	}
 }
-export default barginGA
+export default bgap

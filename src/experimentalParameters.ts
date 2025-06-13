@@ -1,3 +1,7 @@
+export const USER_NUM = [10, 20, 30, 40]
+
+export const ASSISTOR_NUM = 20
+
 export const TASK_VALUE_RANGE: [number, number] = [5.0, 10.0]
 
 export const DATA_SIZE_RANGE: [number, number] = [0.1 * 1e6, 5.0 * 1e6]
@@ -8,7 +12,7 @@ export const DELAY_TOLERANCE_RANGE: [number, number] = [1.0, 5.0]
 
 export const TASK_VALUE_DECAY_FACTOR_RANGE: [number, number] = [0.5, 2.0]
 
-export const SERVER_COMPUTATION_RESOURCE: number = 8 * 1e9
+export const SERVER_COMPUTATION_RESOURCE: number = 8.0 * 1e9
 
 export const ASSISTED_VEHICLE_COMPUTATION_RESOURCE_RANGE: [number, number] = [1.0 * 1e9, 5.0 * 1e9]
 
@@ -26,6 +30,6 @@ export const POWER_CONSUMPTION_FACTOR: number = 1e-27
 
 export const ELECTRICITY_UNIT_PRICE: number = 1
 
-export const STACKELBERG_USER_EXIT_THRESHOLD: number = 0.6
+export const STACKELBERG_USER_EXIT_THRESHOLD: number = 0.2
 
 export const SEED = '42'

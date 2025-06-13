@@ -1,9 +1,5 @@
-import {
-	ELECTRICITY_UNIT_PRICE,
-	POWER_CONSUMPTION_FACTOR,
-	STACKELBERG_USER_EXIT_THRESHOLD,
-} from '../experimentalParameters.ts'
-import { AlgorithmResult, PayingResult, TaskRequests, TaskResults, Utility } from '../type.d.ts'
+import { ELECTRICITY_UNIT_PRICE, POWER_CONSUMPTION_FACTOR } from '../experimentalParameters.ts'
+import { PayingResult, StageIResult, TaskRequests, TaskResults, Utility } from '../type.d.ts'
 import {
 	computeEnergyCost,
 	computeMinimumComputationResource,
@@ -15,8 +11,9 @@ import {
 function mvsp(
 	taskRequests: TaskRequests,
 	restComputationResource: number,
-	transmissionPower: number,
-): AlgorithmResult {
+	allocatedTransmissionPower: number,
+	stackelbergUserExitThreshold?: number,
+): StageIResult {
 	let serverCost = 0
 	let serverIncome = 0
 	let serverUtility = 0
@@ -35,10 +32,13 @@ function mvsp(
 
 		const transmissionDurationToServer = computeTaskTransmissionDuration(dataSize, transmissionRate)
 		const transmissionEnergyComsumption = computeTaskTransmissionEnergyConsumption(
-			transmissionPower,
+			allocatedTransmissionPower,
 			transmissionDurationToServer,
 		)
-		const transmissionEnergyCostToServer = computeEnergyCost(ELECTRICITY_UNIT_PRICE, transmissionEnergyComsumption)
+		const transmissionEnergyCostToServer = computeEnergyCost(
+			ELECTRICITY_UNIT_PRICE,
+			transmissionEnergyComsumption,
+		)
 
 		const fMin = computeMinimumComputationResource(
 			dataSize,
@@ -51,14 +51,15 @@ function mvsp(
 		// non-constraint:  pBest is less or equal than pSwitch
 		const pMinNonConstraint = dataSize * complexity *
 			Math.pow(
-				ELECTRICITY_UNIT_PRICE * ELECTRICITY_UNIT_PRICE * POWER_CONSUMPTION_FACTOR * POWER_CONSUMPTION_FACTOR *
+				ELECTRICITY_UNIT_PRICE * ELECTRICITY_UNIT_PRICE * POWER_CONSUMPTION_FACTOR *
+					POWER_CONSUMPTION_FACTOR *
 					decayFactor,
 				1 / 3,
 			)
 		const pMaxNonConstraint = Math.min(
 			pSwitch,
 			Math.pow(
-				(1 - STACKELBERG_USER_EXIT_THRESHOLD) * value - transmissionEnergyCostToServer -
+				(1 - stackelbergUserExitThreshold!) * value - transmissionEnergyCostToServer -
 					decayFactor * transmissionDurationToServer,
 				2,
 			) / (4 * decayFactor * dataSize * complexity),
@@ -71,7 +72,7 @@ function mvsp(
 			ELECTRICITY_UNIT_PRICE * POWER_CONSUMPTION_FACTOR * fMin * dataSize *
 				complexity,
 		)
-		const pMaxConstraint = ((1 - STACKELBERG_USER_EXIT_THRESHOLD) * value - transmissionEnergyCostToServer -
+		const pMaxConstraint = ((1 - stackelbergUserExitThreshold!) * value - transmissionEnergyCostToServer -
 			decayFactor * delayTolerance) / fMin
 
 		const pBestConstraint = pMinConstraint > pMaxConstraint ? 0 : pMaxConstraint
@@ -102,7 +103,11 @@ function mvsp(
 		}
 		if (pBest > 0) {
 			const paying = pBest * allocatedComputationResource
-			const executionDuration = computeTaskExecutionDuration(dataSize, complexity, allocatedComputationResource)
+			const executionDuration = computeTaskExecutionDuration(
+				dataSize,
+				complexity,
+				allocatedComputationResource,
+			)
 			const taskCost = computeEnergyCost(
 				ELECTRICITY_UNIT_PRICE,
 				computeTaskExecutionEnergyConsumption(
@@ -122,8 +127,7 @@ function mvsp(
 				allocatedComputationResource,
 				executionDuration,
 				taskCost,
-				transmissionDurationToServer,
-				transmissionDurationToAssistor: 0,
+				taskDuration: transmissionDurationToServer + executionDuration,
 				utilityFromUser,
 				utilityFromServer,
 			}
@@ -139,7 +143,12 @@ function mvsp(
 			serverIncome += taskResult.paying
 			usedComputationResource += taskResult.allocatedComputationResource
 		} else {
-			taskResults[taskId] = { willingToPay: taskResult.paying }
+			taskResults[taskId] = {
+				willingToPay: taskResult.paying,
+				allowedTime: taskResult.executionDuration,
+				taskDuration: taskResult.taskDuration,
+				utilityFromUser: taskResult.utilityFromUser,
+			}
 		}
 	}
 	avergeUnitResourcePrice = usedComputationResource == 0 ? 0 : serverIncome / usedComputationResource

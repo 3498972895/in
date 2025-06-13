@@ -7,13 +7,13 @@ import {
 	computeTaskTransmissionDuration,
 	computeTaskTransmissionEnergyConsumption,
 } from '../utils/calculator.ts'
-import { AlgorithmResult, PayingResult, TaskRequests, TaskResults, Utility } from '../type.d.ts'
+import { PayingResult, StageIResult, TaskRequests, TaskResults, Utility } from '../type.d.ts'
 
-function mrnbp(
+function mrbp(
 	taskRequests: TaskRequests,
 	restComputationResource: number,
-	transmissionPower: number,
-): AlgorithmResult {
+	allocatedTransmissionPower: number,
+): StageIResult {
 	let serverCost = 0
 	let serverIncome = 0
 	let serverUtility = 0
@@ -32,7 +32,7 @@ function mrnbp(
 		const transmissionDurationToServer = computeTaskTransmissionDuration(dataSize, transmissionRate)
 
 		const transmissionEnergyComsumption = computeTaskTransmissionEnergyConsumption(
-			transmissionPower,
+			allocatedTransmissionPower,
 			transmissionDurationToServer,
 		)
 		const transmissionEnergyCostToServer = computeEnergyCost(ELECTRICITY_UNIT_PRICE, transmissionEnergyComsumption)
@@ -67,8 +67,6 @@ function mrnbp(
 			const executionLocation = 'server'
 			const executionDuration = computeTaskExecutionDuration(dataSize, complexity, allocatedComputationResource)
 
-			const transmissionDurationToAssistor = 0
-
 			const utilityFromUser = value - transmissionEnergyCostToServer - paying -
 				decayFactor * (transmissionDurationToServer + executionDuration)
 			const utilityFromServer = paying - taskCost
@@ -79,8 +77,7 @@ function mrnbp(
 				allocatedComputationResource,
 				executionDuration,
 				taskCost,
-				transmissionDurationToServer,
-				transmissionDurationToAssistor,
+				taskDuration: transmissionDurationToServer + executionDuration,
 				utilityFromUser,
 				utilityFromServer,
 			}
@@ -95,7 +92,12 @@ function mrnbp(
 			serverIncome += taskResult.paying
 			usedComputationResource += taskResult.allocatedComputationResource
 		} else {
-			taskResults[taskId] = { willingToPay: taskResult.paying }
+			taskResults[taskId] = {
+				willingToPay: taskResult.paying,
+				allowedTime: taskResult.executionDuration,
+				taskDuration: taskResult.taskDuration,
+				utilityFromUser: taskResult.utilityFromUser,
+			}
 		}
 	}
 	avergeUnitResourcePrice = serverIncome / usedComputationResource
@@ -110,4 +112,4 @@ function mrnbp(
 	}
 }
 
-export default mrnbp
+export default mrbp

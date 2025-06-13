@@ -1,21 +1,15 @@
-export type Resource = number
-export type Price = number
-export type Utility = number
-export type Time = number
-type VehicleType = 'task' | 'assistor'
-
-export type AlgorithmResult = {
-	serverCost: Price
-	serverIncome: Price
-	serverUtility: Price
-	usedComputationResource: Price
-	avergeUnitResourcePrice: Price
-	taskResults: { [taskId: string]: TaskResult }
-}
 export type ComplexNumber = {
 	real: number
 	imag: number
 }
+
+export type Resource = number
+export type Price = number
+export type Utility = number
+export type Time = number
+export type BidderId = string
+export type ParticipantId = string
+
 export type Task = {
 	dataSize: number
 	complexity: number
@@ -32,16 +26,23 @@ type CommunicationVehicle = {
 
 export type ExecutionLocation = 'noWhere' | 'server' | 'assistor'
 
-export type TasksPaying = {
-	[taskId: string]: Price
-}
+type VehicleType = 'task' | 'assistor'
 
+export type StageIResult = {
+	serverCost: Price
+	serverIncome: Price
+	serverUtility: Price
+	usedComputationResource: Price
+	avergeUnitResourcePrice: Price
+	taskResults: { [taskId: string]: TaskResult }
+}
 export type TaskRequest = {
 	userId: string
 	task: Task
 	transmissionRate: number
 	updateCallback: (data: TaskFeedback) => void
 }
+
 export type TaskFeedback = {
 	utility: number
 	paying: number
@@ -60,43 +61,63 @@ export type PayingResult = {
 	allocatedComputationResource: Resource
 	executionDuration: Time
 	taskCost: Price
-	transmissionDurationToServer: Time
-	transmissionDurationToAssistor: Time
+	taskDuration: Time
 	utilityFromUser: Utility
 	utilityFromServer: Utility
 }
-export type NotPayingResult = { willingToPay: Price }
-export type TaskResult = PayingResult | NotPayingResult
+export type NotPayingResult = {
+	willingToPay: Price
+	allowedTime: Time
+	taskDuration: Time
+	utilityFromUser: Utility
+}
 export type TaskResults = {
 	[taskId: string]: TaskResult
 }
 
-export type BidderRequest = {
-	assistor_id: string
-	transmissionRate: number
-	computationResource: number
-	updateCallback: (data: BidResult) => void
-}
-export type Bidders = {
-	[bidderId: string]: BidderRequest
+export type TaskResult = PayingResult | NotPayingResult
+
+export type StageIIResult = {
+	serverCost: Price
+	serverIncome: Price
+	serverUtility: Utility
+	outsourcingResults: OutsourcingResults
 }
 
-export type BidItem = {
-	taskId: string
-	task: Task
-	taskWillingToPaying: number
-	transmissionDurationToServer: number
+export type AssistorRequest = {
+	assistorId: string
+	transmissionRate: number
+	computationResource: number
+	updateCallback: (data: OutsourcingFeedback) => void
 }
+
+export type Participants = { [participantId: string]: AssistorRequest }
+
+export type Bidders = { [bidderId: string]: AssistorRequest }
+
+export type OutsourcingTask = {
+	taskId: string
+	dataSize: number
+	complexity: number
+	allowedTime: number
+	nominalHighestBidPrice: Price
+}
+
+export type BidItem = OutsourcingTask
+
+export type OutsourcingTasks = {
+	[outsourcingId: string]: OutsourcingTask
+}
+
 export type BidItems = {
 	[bidId: string]: BidItem
 }
 
 export type BidTransition = {
-	acceptableMaximumAuctionPriceFromSeller: number
-	acceptableMinimumAuctionPriceFromBidder: number
-	computationResourceRequirement: number
-	transmissionDurationToBidder: number
 	bidderId: string
+	bidderCost: number
+	computationResourceRequirement: number
+	transmissionEnergyCostToBidder: number
 	bid: number
 }
 export type BidTransitions = {
@@ -105,10 +126,35 @@ export type BidTransitions = {
 
 export type BidResult = {
 	bidId: string
-	winnerIncome: number
-	winnerCost: number
-	winnerUtility: number
+	bidWinnerId: string
+	bidWinnerIncome: number
+	bidWinnerCost: number
+	bidWinnerUtility: number
+	allocatedComputationResource: number
+	taskCost: Price
+	executionDuration: Time
+	serverUtility: Price
 }
-export type BidResults = {
-	[winnerBidderId: string]: BidResult
+
+export type OutsourcingResult = {
+	outsourcingId: string
+	choosenParticipantId: string
+	choosenParticipantIncome: number
+	choosenParticipantCost: number
+	choosenParticipantUtility: number
+	allocatedComputationResource: number
+	taskCost: Price
+	executionDuration: Time
+	serverUtility: Price
+}
+
+export type OutsourcingResults = {
+	[taskId: string]: OutsourcingResult
+}
+
+export type OutsourcingFeedback = {
+	outsourcingId: string
+	income: number
+	cost: number
+	utility: number
 }

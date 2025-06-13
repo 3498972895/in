@@ -4,9 +4,7 @@ import {
 	DATA_SIZE_RANGE,
 	DELAY_TOLERANCE_RANGE,
 	DISTANCE_RANGE,
-	ELECTRICITY_UNIT_PRICE,
 	PATH_LOSS_EXPONENT,
-	POWER_CONSUMPTION_FACTOR,
 	TASK_COMPLEXITY,
 	TASK_VALUE_DECAY_FACTOR_RANGE,
 	TASK_VALUE_RANGE,
@@ -14,17 +12,7 @@ import {
 } from '../experimentalParameters.ts'
 import { CommunicationVehicle, Task } from '../type.d.ts'
 import { randomBetween } from '../utils/generation.ts'
-import {
-	computeChannelGain,
-	computeEnergyCost,
-	computeInterference,
-	computeMinimumComputationResource,
-	computeSINR,
-	computeTaskExecutionEnergyConsumption,
-	computeTaskTransmissionDuration,
-	computeTaskTransmissionEnergyConsumption,
-	computeTransmissionRate,
-} from '../utils/calculator.ts'
+import { computeChannelGain, computeInterference, computeSINR, computeTransmissionRate } from '../utils/calculator.ts'
 import User from '../entities/User.ts'
 import Assistor from '../entities/Assistor.ts'
 
@@ -36,10 +24,10 @@ export function generateUsers(n: number, serverTransmissionPower: number) {
 	const tasks: Task[] = []
 	const transmissionRates = new Array(n)
 	for (let i = 0; i < n; i++) {
-		const dataSize = randomBetween(...DATA_SIZE_RANGE)
-		const delayTolerance = randomBetween(...DELAY_TOLERANCE_RANGE)
-		const value = randomBetween(...TASK_VALUE_RANGE)
-		const decayFactor = randomBetween(...TASK_VALUE_DECAY_FACTOR_RANGE)
+		const dataSize = randomBetween(true, ...DATA_SIZE_RANGE)
+		const delayTolerance = randomBetween(true, ...DELAY_TOLERANCE_RANGE)
+		const value = randomBetween(true, ...TASK_VALUE_RANGE)
+		const decayFactor = randomBetween(true, ...TASK_VALUE_DECAY_FACTOR_RANGE)
 		const complexity = TASK_COMPLEXITY
 		const task: Task = {
 			dataSize,
@@ -57,7 +45,7 @@ export function generateUsers(n: number, serverTransmissionPower: number) {
 		const interferences = new Array(n)
 		const SINRs = new Array(n)
 		for (let i = 0; i < n; i++) {
-			distances[i] = randomBetween(...DISTANCE_RANGE)
+			distances[i] = randomBetween(true, ...DISTANCE_RANGE)
 			channelGains[i] = computeChannelGain(distances[i], PATH_LOSS_EXPONENT)
 		}
 		for (let i = 0; i < n; i++) {
@@ -87,15 +75,15 @@ export function generateUsers(n: number, serverTransmissionPower: number) {
 export function generateAssistors(n: number, serverTransmissionPower: number) {
 	const allocatedTransmissionPower = serverTransmissionPower / n
 	const assistors = []
-	const assistorId = self.crypto.randomUUID()
 	const distances = new Array(n)
 	const channelGains = new Array(n)
 	for (let i = 0; i < n; i++) {
-		distances[i] = randomBetween(...DISTANCE_RANGE)
+		distances[i] = randomBetween(true, ...DISTANCE_RANGE)
 		channelGains[i] = computeChannelGain(distances[i], PATH_LOSS_EXPONENT)
 	}
 	for (let i = 0; i < n; i++) {
-		const computationResource = randomBetween(...ASSISTED_VEHICLE_COMPUTATION_RESOURCE_RANGE)
+		const assistorId = self.crypto.randomUUID()
+		const computationResource = randomBetween(true, ...ASSISTED_VEHICLE_COMPUTATION_RESOURCE_RANGE)
 		const interference = computeInterference(channelGains, channelGains[i], allocatedTransmissionPower)
 		const SINR = computeSINR(channelGains[i], allocatedTransmissionPower, interference, WHITE_GAUSSIAN_NOISE)
 		const transmissionRate = computeTransmissionRate(BANDWIDTH, SINR)

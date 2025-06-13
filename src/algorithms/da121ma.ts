@@ -1,44 +1,42 @@
 import {
 	computeEnergyCost,
 	computeMinimumComputationResource,
+	computeTaskExecutionDuration,
 	computeTaskExecutionEnergyConsumption,
 	computeTaskTransmissionDuration,
 	computeTaskTransmissionEnergyConsumption,
 } from '../utils/calculator.ts'
 import { randomBetween } from '../utils/generation.ts'
-import { Bidders, BidItems, BidResults, BidTransitions, TaskResDistro, TasksPaying, Time } from '../type.d.ts'
+import { BidderId, Bidders, BidItems, BidResult, BidTransitions, OutsourcingResults, StageIIResult } from '../type.d.ts'
 import { ELECTRICITY_UNIT_PRICE, POWER_CONSUMPTION_FACTOR } from '../experimentalParameters.ts'
 
-function da121ma(bidItems: BidItems, bidders: Bidders, transmissionPower: number) {
+function da121ma(bidItems: BidItems, bidders: Bidders, allocatedTransmissionPower: number): StageIIResult {
 	let serverCost = 0
 	let serverIncome = 0
 	let serverUtility = 0
 	const bidTransitions: BidTransitions = {}
-	const tasksPaying: TasksPaying = {}
-	const taskResDistro: TaskResDistro = {}
-	const transmissionDurationToWinnerBidders: { [taskId: string]: Time } = {}
-	const bidResults: BidResults = {}
+	const outsourcingResults: OutsourcingResults = {}
+	const assignedBidders = new Set<BidderId>()
 
 	for (const bidId in bidItems) {
+		bidTransitions[bidId] = []
 		for (const bidderId in bidders) {
-			const dataSize = bidItems[bidId].task.dataSize
-			const complexity = bidItems[bidId].task.complexity
-			const delayTolerance = bidItems[bidId].task.delayTolerance
-			const transmissionDurationToServer = bidItems[bidId].transmissionDurationToServer
+			const dataSize = bidItems[bidId].dataSize
+			const complexity = bidItems[bidId].complexity
+			const allowedTime = bidItems[bidId].allowedTime
 			const transmitionRate = bidders[bidderId].transmissionRate
 			const transmissionDurationToBidder = computeTaskTransmissionDuration(dataSize, transmitionRate)
-			const taskWillingToPaying = bidItems[bidId].taskWillingToPaying
-
+			const nominalHighestBidPrice = bidItems[bidId].nominalHighestBidPrice
 			const transmissionEnergyCostToBidder = computeEnergyCost(
 				ELECTRICITY_UNIT_PRICE,
-				computeTaskTransmissionEnergyConsumption(transmissionPower, transmissionDurationToBidder),
+				computeTaskTransmissionEnergyConsumption(allocatedTransmissionPower, transmissionDurationToBidder),
 			)
-			const acceptableMaximumAuctionPriceFromSeller = taskWillingToPaying - transmissionEnergyCostToBidder
+			const acceptableMaximumAuctionPriceFromSeller = nominalHighestBidPrice - transmissionEnergyCostToBidder
 			const computationResourceRequirement = computeMinimumComputationResource(
 				dataSize,
 				complexity,
-				transmissionDurationToServer + transmissionEnergyCostToBidder,
-				delayTolerance,
+				transmissionDurationToBidder,
+				allowedTime,
 			)
 			if (computationResourceRequirement <= bidders[bidderId].computationResource) {
 				const acceptableMinimumAuctionPriceFromBidder = computeEnergyCost(
@@ -50,62 +48,103 @@ function da121ma(bidItems: BidItems, bidders: Bidders, transmissionPower: number
 						complexity,
 					),
 				)
-				if (bidTransitions[bidId] == undefined) {
-					bidTransitions[bidId] = []
-				}
-				bidTransitions[bidId] = [...bidTransitions[bidId], {
-					acceptableMaximumAuctionPriceFromSeller,
-					acceptableMinimumAuctionPriceFromBidder,
-					transmissionDurationToBidder,
-					computationResourceRequirement,
-					bidderId,
-					bid: acceptableMinimumAuctionPriceFromBidder <= acceptableMaximumAuctionPriceFromSeller
-						? randomBetween(
+
+				if (acceptableMinimumAuctionPriceFromBidder <= acceptableMaximumAuctionPriceFromSeller) {
+					bidTransitions[bidId] = [...bidTransitions[bidId], {
+						bidderId,
+						bidderCost: acceptableMinimumAuctionPriceFromBidder,
+						computationResourceRequirement,
+						transmissionEnergyCostToBidder,
+						bid: randomBetween(
+							true,
 							acceptableMinimumAuctionPriceFromBidder,
 							acceptableMaximumAuctionPriceFromSeller,
-						)
-						: 0,
-				}]
+						),
+					}]
+				}
 			}
 		}
 	}
 
 	for (const bidId in bidItems) {
-		const transition = bidTransitions[bidId]
-		const [choosenBidderId, choosenBidUtilty] = transition.reduce(
-			([choosenBidderId, choosenBidUtility], bidTransition) => {
-				const currentBidUtility = bidTransition.acceptableMaximumAuctionPriceFromSeller - bidTransition.bid
-				return currentBidUtility > choosenBidUtility
-					? [bidTransition.bidderId, currentBidUtility]
-					: [choosenBidderId, choosenBidUtility]
-			},
-			['', 0],
+		const taskId = bidItems[bidId].taskId
+		const dataSize = bidItems[bidId].dataSize
+		const complexity = bidItems[bidId].complexity
+		const transitionCollection = bidTransitions[bidId].filter((bidTransition) =>
+			!assignedBidders.has(bidTransition.bidderId)
 		)
-		const choosenTransition = bidTransitions[bidId].filter((bidTransition) =>
-			bidTransition.bidderId == choosenBidderId
-		)[0]
-		serverCost += choosenTransition.bid
-		serverIncome += choosenTransition.acceptableMaximumAuctionPriceFromSeller
-		serverUtility += choosenBidUtilty
-		taskResDistro[bidItems[bidId].taskId] = choosenTransition.computationResourceRequirement
-		tasksPaying[bidItems[bidId].taskId] = bidItems[bidId].taskWillingToPaying
-		bidResults[choosenTransition.bidderId] = {
-			bidId: bidId,
-			winnerIncome: choosenTransition.bid,
-			winnerCost: choosenTransition.acceptableMinimumAuctionPriceFromBidder,
-			winnerUtility: choosenTransition.bid - choosenTransition.acceptableMinimumAuctionPriceFromBidder,
-		}
-		transmissionDurationToWinnerBidders[bidItems[bidId].taskId] = choosenTransition.transmissionDurationToBidder
-	}
 
+		if (transitionCollection.length !== 0) {
+			const selectedBidderInfo = transitionCollection.reduce(
+				(acc, bidTransition) => {
+					const currentTotalCost = bidTransition.bid + bidTransition.transmissionEnergyCostToBidder
+
+					if (currentTotalCost < acc.minTotalCost) {
+						return {
+							minTotalCostBidderId: bidTransition.bidderId,
+							bidderCost: bidTransition.bidderCost,
+							bid: bidTransition.bid,
+							allocatedComputationResource: bidTransition.computationResourceRequirement,
+							transmissionCost: bidTransition.transmissionEnergyCostToBidder,
+							minTotalCost: currentTotalCost,
+						}
+					}
+					return acc
+				},
+				{
+					minTotalCostBidderId: transitionCollection[0].bidderId,
+					bidderCost: transitionCollection[0].bidderCost,
+					bid: transitionCollection[0].bid,
+					allocatedComputationResource: transitionCollection[0].computationResourceRequirement,
+					transmissionCost: transitionCollection[0].transmissionEnergyCostToBidder,
+					minTotalCost: transitionCollection[0].bid + transitionCollection[0].transmissionEnergyCostToBidder,
+				},
+			)
+
+			const payment = selectedBidderInfo.bid
+			const taskServerCost = selectedBidderInfo.minTotalCost
+			const taskServerUtility = bidItems[bidId].nominalHighestBidPrice - taskServerCost
+
+			serverCost += taskServerCost
+			serverIncome += bidItems[bidId].nominalHighestBidPrice
+			serverUtility += taskServerUtility
+
+			const bidResult: BidResult = {
+				bidId: bidId,
+				bidWinnerId: selectedBidderInfo.minTotalCostBidderId,
+				bidWinnerIncome: payment,
+				bidWinnerCost: selectedBidderInfo.bidderCost,
+				bidWinnerUtility: payment - selectedBidderInfo.bidderCost,
+				allocatedComputationResource: selectedBidderInfo.allocatedComputationResource,
+				taskCost: selectedBidderInfo.transmissionCost + selectedBidderInfo.bid,
+				executionDuration: computeTaskExecutionDuration(
+					dataSize,
+					complexity,
+					selectedBidderInfo.allocatedComputationResource,
+				),
+				serverUtility: bidItems[bidId].nominalHighestBidPrice -
+					(selectedBidderInfo.transmissionCost + selectedBidderInfo.bid),
+			}
+
+			assignedBidders.add(bidResult.bidWinnerId)
+			outsourcingResults[taskId] = {
+				outsourcingId: bidResult.bidId,
+				choosenParticipantId: bidResult.bidWinnerId,
+				choosenParticipantIncome: bidResult.bidWinnerIncome,
+				choosenParticipantCost: bidResult.bidWinnerCost,
+				choosenParticipantUtility: bidResult.bidWinnerUtility,
+				allocatedComputationResource: bidResult.allocatedComputationResource,
+				taskCost: bidResult.taskCost,
+				executionDuration: bidResult.executionDuration,
+				serverUtility: bidResult.serverUtility,
+			}
+		}
+	}
 	return {
 		serverCost,
 		serverIncome,
 		serverUtility,
-		taskResDistro,
-		tasksPaying,
-		transmissionDurationToWinnerBidders,
-		bidResults,
+		outsourcingResults,
 	}
 }
 export default da121ma

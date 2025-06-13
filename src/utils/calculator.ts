@@ -103,7 +103,8 @@ export function computeTaskMaxExecutionTime(
 	delayTolerance: number,
 	timeElapsed: number,
 ): number {
-	return delayTolerance - timeElapsed
+	const maxExecutionTime = delayTolerance - timeElapsed
+	return maxExecutionTime > 0 ? maxExecutionTime : 0
 }
 
 export function computeTaskTransmissionEnergyConsumption(
